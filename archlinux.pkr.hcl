@@ -1,5 +1,33 @@
+packer {
+  required_plugins {
+    qemu = {
+      source  = "github.com/hashicorp/qemu"
+      version = "~> 1"
+    }
+    ansible = {
+      source  = "github.com/hashicorp/ansible"
+      version = "~> 1"
+    }
+  }
+}
+
 variable "username" {
-  type = string
+  type 	  = string
+  default = "arch"
+}
+
+variable "password" {
+  type    = string
+  default = "admin"
+}
+variable "full_iso_url" {
+  description = "Full URL to the ISO image"
+  type        = string
+}
+
+variable "full_iso_checksum" {
+  description = "Full URL to the ISO checksum"
+  type        = string
 }
 
 source "qemu" "archlinux" {
@@ -8,11 +36,11 @@ source "qemu" "archlinux" {
   disk_interface        = "virtio"
   format                = "qcow2"
   http_directory        = "./http"
-  iso_checksum          = "file:https://geo.mirror.pkgbuild.com/images/latest/Arch-Linux-x86_64-cloudimg.qcow2.SHA256"
-  iso_url               = "https://geo.mirror.pkgbuild.com/images/latest/Arch-Linux-x86_64-cloudimg.qcow2"
+  iso_checksum          = "${var.full_iso_checksum}"
+  iso_url               = "${var.full_iso_url}"
   net_device            = "virtio-net"
   shutdown_command      = "sudo systemctl poweroff"
-  ssh_password          = "archPassword"
+  ssh_password          = "${var.password}"
   ssh_timeout           = "20m"
   ssh_username          = "${var.username}"
   vm_name               = "golden-arch.qcow2"
@@ -21,13 +49,21 @@ source "qemu" "archlinux" {
   boot_wait             = "30s"
   boot_command          = [
       "${var.username}<enter>arch<enter>",
-      "arch<enter>archPassword<enter>archPassword<enter><wait>",
+      "arch<enter>${var.password}<enter>${var.password}<enter><wait>",
       "curl -sfSLO http://{{ .HTTPIP }}:{{ .HTTPPort }}/pkglist.txt<enter><wait>"
     ]
 }
 
 build {
   sources = ["source.qemu.archlinux"]
+
+  provisioner "shell" {
+    inline = [
+        "echo '## South Africa' | sudo tee /etc/pacman.d/mirrorlist",
+        "echo 'Server = https://archlinux.za.mirror.allworldit.com/archlinux/$repo/os/$arch' | sudo tee -a /etc/pacman.d/mirrorlist",
+        "sudo pacman -Syu --noconfirm"
+    ]
+  }
 
   provisioner "shell" {
     inline = ["sudo pacman -Sy ansible --noconfirm"]
@@ -42,3 +78,4 @@ build {
     inline = ["sudo usermod -p '!' ${var.username}"]
   }
 }
+
